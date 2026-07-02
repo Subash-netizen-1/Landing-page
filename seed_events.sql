@@ -1,5 +1,9 @@
 -- Seed Example Events into public.events table
 
+-- 1. Temporarily disable Row Level Security to allow SQL Editor inserts without a session user
+ALTER TABLE public.events DISABLE ROW LEVEL SECURITY;
+
+-- 2. Run the SQL inserts
 DO $$
 DECLARE
   conf_id UUID;
@@ -8,16 +12,16 @@ DECLARE
   concert_id UUID;
   admin_id UUID;
 BEGIN
-  -- 1. Get Category UUIDs
+  -- Get Category UUIDs
   SELECT id INTO conf_id FROM public.event_categories WHERE name = 'Conference' LIMIT 1;
   SELECT id INTO work_id FROM public.event_categories WHERE name = 'Workshop' LIMIT 1;
   SELECT id INTO web_id FROM public.event_categories WHERE name = 'Webinar' LIMIT 1;
   SELECT id INTO concert_id FROM public.event_categories WHERE name = 'Music Concert' LIMIT 1;
 
-  -- 2. Get any profile UUID (to associate with created_by), or use NULL
+  -- Get any profile UUID (to associate with created_by), or use NULL
   SELECT id INTO admin_id FROM public.profiles LIMIT 1;
 
-  -- 3. Insert Events
+  -- Insert Events
   INSERT INTO public.events (
     name, code, description, category_id, venue, address, city, state, country,
     start_date, end_date, start_time, end_time, capacity, organizer_name,
@@ -125,3 +129,6 @@ BEGIN
   )
   ON CONFLICT (code) DO NOTHING;
 END $$;
+
+-- 3. Re-enable Row Level Security immediately after
+ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
