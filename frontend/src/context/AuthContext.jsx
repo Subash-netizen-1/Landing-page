@@ -148,6 +148,7 @@ export const AuthProvider = ({ children }) => {
           email,
           password,
           options: {
+            emailRedirectTo: `${window.location.origin}`,
             data: {
               full_name: fullName,
               role: roleSelection,
@@ -159,6 +160,27 @@ export const AuthProvider = ({ children }) => {
       } catch (err) {
         setLoading(false);
         return { data: null, error: err };
+      }
+    }
+  };
+
+  // Resend Email Verification
+  const resendVerification = async (email) => {
+    if (isDemoMode) {
+      return { error: null };
+    } else {
+      try {
+        const { error } = await supabase.auth.resend({
+          type: 'signup',
+          email,
+          options: {
+            emailRedirectTo: `${window.location.origin}`
+          }
+        });
+        if (error) throw error;
+        return { error: null };
+      } catch (err) {
+        return { error: err };
       }
     }
   };
@@ -266,6 +288,7 @@ export const AuthProvider = ({ children }) => {
       forgotPassword,
       resetPassword,
       updateProfile,
+      resendVerification,
       isDemoMode,
       toggleDemoMode
     }}>
