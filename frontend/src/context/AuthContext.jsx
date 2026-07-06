@@ -5,9 +5,9 @@ const AuthContext = createContext();
 
 // Seed default users for Demo Mode
 const DEMO_USERS = [
-  { id: 'd1', email: 'admin@apexevents.com', password: 'password123', full_name: 'Alex Administrator', role: 'Super Admin', avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80' },
-  { id: 'd2', email: 'manager@apexevents.com', password: 'password123', full_name: 'Morgan Manager', role: 'Event Manager', avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80' },
-  { id: 'd3', email: 'staff@apexevents.com', password: 'password123', full_name: 'Sam Staff', role: 'Staff', avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80' }
+  { id: 'd1', email: 'admin@apexevents.com', phone: '+15555551234', password: 'password123', full_name: 'Alex Administrator', role: 'Super Admin', avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80' },
+  { id: 'd2', email: 'manager@apexevents.com', phone: '+15555555678', password: 'password123', full_name: 'Morgan Manager', role: 'Event Manager', avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80' },
+  { id: 'd3', email: 'staff@apexevents.com', phone: '+15555559012', password: 'password123', full_name: 'Sam Staff', role: 'Staff', avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80' }
 ];
 
 export const AuthProvider = ({ children }) => {
@@ -185,6 +185,119 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Sign In / Sign Up with OTP (Email/Phone)
+  const signInWithOtp = async ({ email, phone, fullName, roleSelection = 'Staff', isSigningUp = false }) => {
+    setLoading(true);
+    if (isDemoMode) {
+      const users = JSON.parse(localStorage.getItem('demo_users') || '[]');
+      if (isSigningUp) {
+        if (email && users.some(u => u.email === email)) {
+          setLoading(false);
+          return { error: new Error('Email already registered.') };
+        }
+        if (phone && users.some(u => u.phone === phone)) {
+          setLoading(false);
+          return { error: new Error('Phone number already registered.') };
+        }
+      } else {
+        const found = users.find(u => (email && u.email === email) || (phone && u.phone === phone));
+        if (!found) {
+          setLoading(false);
+          return { error: new Error('User account not found for local demo. Please register first.') };
+        }
+      }
+      setLoading(false);
+      return { error: null };
+    } else {
+      try {
+        const options = {
+          shouldCreateUser: isSigningUp,
+        };
+        if (isSigningUp) {
+          options.data = {
+            full_name: fullName,
+            role: roleSelection,
+          };
+        }
+        
+        const payload = {};
+        if (email) {
+          payload.email = email;
+          options.emailRedirectTo = `${window.location.origin}`;
+        } else if (phone) {
+          payload.phone = phone;
+        }
+        payload.options = options;
+
+        const { data, error } = await supabase.auth.signInWithOtp(payload);
+        setLoading(false);
+        if (error) throw error;
+        return { data, error: null };
+      } catch (err) {
+        setLoading(false);
+        return { data: null, error: err };
+      }
+    }
+  };
+
+  // Verify OTP Code
+  const verifyOtp = async ({ email, phone, token, fullName, roleSelection = 'Staff', isSigningUp = false }) => {
+    setLoading(true);
+    if (isDemoMode) {
+      if (token !== '123456') {
+        setLoading(false);
+        return { error: new Error('Invalid OTP code. For demo mode, please use 123456.') };
+      }
+
+      const users = JSON.parse(localStorage.getItem('demo_users') || '[]');
+      let currentUser;
+
+      if (isSigningUp) {
+        currentUser = {
+          id: 'd' + (users.length + 1),
+          email: email || null,
+          phone: phone || null,
+          full_name: fullName,
+          role: roleSelection,
+          avatar_url: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(fullName)}`
+        };
+        users.push(currentUser);
+        localStorage.setItem('demo_users', JSON.stringify(users));
+      } else {
+        currentUser = users.find(u => (email && u.email === email) || (phone && u.phone === phone));
+      }
+
+      setUser({ id: currentUser.id, email: currentUser.email, phone: currentUser.phone });
+      setProfile(currentUser);
+      setRole(currentUser.role);
+      localStorage.setItem('demo_session', JSON.stringify(currentUser));
+      setLoading(false);
+      return { data: { user: currentUser }, error: null };
+    } else {
+      try {
+        const payload = {
+          token,
+          type: email ? 'email' : 'sms',
+        };
+        if (email) {
+          payload.email = email;
+        } else if (phone) {
+          payload.phone = phone;
+        }
+
+        const { data, error } = await supabase.auth.verifyOtp(payload);
+        if (error) throw error;
+
+        setUser(data.user);
+        setLoading(false);
+        return { data, error: null };
+      } catch (err) {
+        setLoading(false);
+        return { data: null, error: err };
+      }
+    }
+  };
+
   // Logout
   const logout = async () => {
     setLoading(true);
@@ -289,6 +402,8 @@ export const AuthProvider = ({ children }) => {
       resetPassword,
       updateProfile,
       resendVerification,
+      signInWithOtp,
+      verifyOtp,
       isDemoMode,
       toggleDemoMode
     }}>

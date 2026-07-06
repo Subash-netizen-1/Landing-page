@@ -7,7 +7,8 @@ drop function if exists public.handle_new_user();
 -- 1. Create PROFILES Table
 create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
-  email text not null,
+  email text,
+  phone text,
   full_name text,
   role text not null default 'Staff' check (role in ('Super Admin', 'Event Manager', 'Staff')),
   avatar_url text,
@@ -164,11 +165,12 @@ alter table public.settings enable row level security;
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, email, full_name, role, avatar_url)
+  insert into public.profiles (id, email, phone, full_name, role, avatar_url)
   values (
     new.id,
     new.email,
-    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    new.phone,
+    coalesce(new.raw_user_meta_data->>'full_name', coalesce(split_part(new.email, '@', 1), 'User')),
     coalesce(new.raw_user_meta_data->>'role', 'Staff'),
     new.raw_user_meta_data->>'avatar_url'
   );
