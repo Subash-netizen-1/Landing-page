@@ -210,9 +210,7 @@ export const AuthProvider = ({ children }) => {
       return { error: null };
     } else {
       try {
-        const options = {
-          shouldCreateUser: isSigningUp,
-        };
+        const options = {};
         if (isSigningUp) {
           options.data = {
             full_name: fullName,
@@ -223,7 +221,7 @@ export const AuthProvider = ({ children }) => {
         const payload = {};
         if (email) {
           payload.email = email;
-          options.emailRedirectTo = `${window.location.origin}`;
+          options.redirectTo = `${window.location.origin}`;
         } else if (phone) {
           payload.phone = phone;
         }
