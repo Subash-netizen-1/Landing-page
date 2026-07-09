@@ -3,15 +3,15 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
-import { FiMail, FiLock, FiArrowRight, FiShield, FiPhone, FiKey } from 'react-icons/fi';
+import { FiMail, FiLock, FiArrowRight, FiShield, FiPhone, FiKey, FiUser } from 'react-icons/fi';
 
 const Login = () => {
-  const { signInWithOtp, verifyOtp, isDemoMode, toggleDemoMode } = useAuth();
+  const { login, signup, verifyOtp, isDemoMode, toggleDemoMode } = useAuth();
   const navigate = useNavigate();
   const [isRegistering, setIsRegistering] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
-  // OTP Auth States
+  // OTP Sign Up States
   const [authMethod, setAuthMethod] = useState('email'); // 'email' or 'phone'
   const [otpSent, setOtpSent] = useState(false);
   const [otpTarget, setOtpTarget] = useState('');
@@ -30,15 +30,30 @@ const Login = () => {
     return () => clearTimeout(timer);
   }, [otpCooldown]);
 
-  const onSendOtp = async (data) => {
+  const onSignIn = async (data) => {
+    setSubmitting(true);
+    const { email, password } = data;
+    
+    const { error } = await login(email, password);
+    setSubmitting(false);
+    
+    if (error) {
+      toast.error(error.message || 'Invalid email or password.');
+    } else {
+      toast.success('Logged in successfully!');
+      navigate('/');
+    }
+  };
+
+  const onRegister = async (data) => {
     setSubmitting(true);
     const targetVal = authMethod === 'email' ? data.email : data.phone;
     setOtpTarget(targetVal);
     
     const payload = {
-      isSigningUp: isRegistering,
       fullName: data.full_name,
-      roleSelection: data.role || 'Staff'
+      roleSelection: data.role || 'Staff',
+      password: data.password
     };
     if (authMethod === 'email') {
       payload.email = targetVal;
@@ -46,21 +61,20 @@ const Login = () => {
       payload.phone = targetVal;
     }
 
-    const { error } = await signInWithOtp(payload);
+    const { error } = await signup(payload);
     setSubmitting(false);
     
     if (error) {
-      toast.error(error.message || 'Failed to send verification code.');
+      toast.error(error.message || 'Registration failed.');
     } else {
       toast.success(`Verification code sent to ${targetVal}!`);
       setOtpSent(true);
       setOtpCooldown(60);
-      if (isRegistering) {
-        setSignupMeta({
-          fullName: data.full_name,
-          role: data.role || 'Staff'
-        });
-      }
+      setSignupMeta({
+        fullName: data.full_name,
+        role: data.role || 'Staff',
+        password: data.password
+      });
     }
   };
 
@@ -74,7 +88,7 @@ const Login = () => {
     setSubmitting(true);
     const payload = {
       token: otpToken,
-      isSigningUp: isRegistering,
+      isSigningUp: true,
       fullName: signupMeta?.fullName,
       roleSelection: signupMeta?.role
     };
@@ -90,7 +104,7 @@ const Login = () => {
     if (error) {
       toast.error(error.message || 'Verification failed. Please try again.');
     } else {
-      toast.success(`Successfully authenticated! Welcome back.`);
+      toast.success(`Successfully registered and authenticated!`);
       navigate('/');
     }
   };
@@ -100,9 +114,9 @@ const Login = () => {
     setResending(true);
     
     const payload = {
-      isSigningUp: isRegistering,
       fullName: signupMeta?.fullName,
-      roleSelection: signupMeta?.role
+      roleSelection: signupMeta?.role,
+      password: signupMeta?.password
     };
     if (authMethod === 'email') {
       payload.email = otpTarget;
@@ -110,7 +124,7 @@ const Login = () => {
       payload.phone = otpTarget;
     }
 
-    const { error } = await signInWithOtp(payload);
+    const { error } = await signup(payload);
     setResending(false);
     
     if (error) {
@@ -122,19 +136,9 @@ const Login = () => {
   };
 
   // Quick login helper for demo mode
-  const handleQuickLogin = async (email, phone = null) => {
+  const handleQuickLogin = async (email) => {
     setSubmitting(true);
-    setAuthMethod(email ? 'email' : 'phone');
-    setOtpTarget(email || phone);
-    
-    const payload = {
-      token: '123456',
-      isSigningUp: false
-    };
-    if (email) payload.email = email;
-    if (phone) payload.phone = phone;
-
-    const { error } = await verifyOtp(payload);
+    const { error } = await login(email, 'password123');
     setSubmitting(false);
     
     if (error) {
@@ -146,7 +150,7 @@ const Login = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-955 transition-colors duration-205">
       {/* Left side: Form */}
       <div className="flex flex-col justify-center flex-1 px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
         <div className="w-full max-w-sm mx-auto lg:w-96">
@@ -160,9 +164,9 @@ const Login = () => {
               </div>
 
               <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white font-display tracking-tight mb-2">
-                Verify OTP Code
+                Verify Registration OTP
               </h2>
-              <p className="text-sm text-gray-550 dark:text-gray-400 mb-5 leading-normal">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 leading-normal">
                 We've sent a 6-digit code to:
               </p>
               
@@ -178,7 +182,7 @@ const Login = () => {
                     value={otpToken}
                     onChange={(e) => setOtpToken(e.target.value.replace(/\D/g, ''))}
                     placeholder="Enter 6-digit code"
-                    className="block w-full text-center px-4 py-3 tracking-[0.7em] text-lg font-bold bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="block w-full text-center px-4 py-3 tracking-[0.7em] text-lg font-bold bg-gray-50 dark:bg-gray-955 border border-gray-200 dark:border-gray-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
 
@@ -187,7 +191,7 @@ const Login = () => {
                   disabled={submitting || otpToken.length < 6}
                   className="flex justify-center w-full px-4 py-3 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded-xl transition-all shadow-md active:scale-98 cursor-pointer items-center gap-1.5"
                 >
-                  {submitting ? 'Verifying...' : 'Verify & Sign In'}
+                  {submitting ? 'Verifying...' : 'Verify & Register'}
                   <FiArrowRight className="w-4 h-4" />
                 </button>
               </form>
@@ -197,7 +201,7 @@ const Login = () => {
                   type="button"
                   onClick={handleResendOtp}
                   disabled={resending || otpCooldown > 0}
-                  className="flex justify-center w-full px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850 rounded-xl transition-all border border-transparent cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex justify-center w-full px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-55 dark:hover:bg-gray-850 rounded-xl transition-all border border-transparent cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {resending 
                     ? 'Resending...' 
@@ -222,7 +226,7 @@ const Login = () => {
 
               {/* Demo Mode helper */}
               {isDemoMode && (
-                <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 text-left">
+                <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-805 text-left">
                   <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-xl">
                     <h4 className="text-xs font-bold text-amber-850 dark:text-amber-350 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                       <FiShield className="w-4 h-4 text-amber-500" />
@@ -244,68 +248,78 @@ const Login = () => {
                 <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white font-display tracking-tight">
                   {isRegistering ? 'Create Account' : 'ApexEvents'}
                 </h2>
-                <p className="mt-2 text-sm text-gray-555 dark:text-gray-400">
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                   {isRegistering 
-                    ? 'Join our enterprise events system'
-                    : 'Passwordless OTP Sign In.'
+                    ? 'Join our enterprise events system using OTP verification'
+                    : 'Sign in with your email and password'
                   }
                 </p>
               </div>
 
-              {/* Tab Bar to choose Email or Phone */}
-              <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-xl mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMethod('email');
-                    reset();
-                  }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    authMethod === 'email'
-                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
-                      : 'text-gray-500 dark:text-gray-450 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  <FiMail className="w-4 h-4" />
-                  Email OTP
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMethod('phone');
-                    reset();
-                  }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    authMethod === 'phone'
-                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
-                      : 'text-gray-500 dark:text-gray-450 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  <FiPhone className="w-4 h-4" />
-                  Phone OTP
-                </button>
-              </div>
+              {/* Tab Bar to choose Email or Phone - ONLY shown during Registration */}
+              {isRegistering && (
+                <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-xl mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMethod('email');
+                      reset({ ...signupMeta });
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      authMethod === 'email'
+                        ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-500 dark:text-gray-450 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <FiMail className="w-4 h-4" />
+                    Email OTP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMethod('phone');
+                      reset({ ...signupMeta });
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      authMethod === 'phone'
+                        ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-500 dark:text-gray-450 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <FiPhone className="w-4 h-4" />
+                    Phone OTP
+                  </button>
+                </div>
+              )}
 
               <div className="mt-6">
-                <form onSubmit={handleSubmit(onSendOtp)} className="space-y-5">
+                <form onSubmit={handleSubmit(isRegistering ? onRegister : onSignIn)} className="space-y-5">
                   {isRegistering && (
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 text-left">
                         Full Name
                       </label>
-                      <input
-                        type="text"
-                        {...register('full_name', { required: 'Full name is required' })}
-                        className="block w-full mt-1 px-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-850 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        placeholder="Alex Administrator"
-                      />
-                      {errors.full_name && (
-                        <span className="text-xs text-red-500 mt-1 block text-left">{errors.full_name.message}</span>
-                      )}
+                      <div className="relative mt-1">
+                        <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 dark:text-gray-500">
+                          <FiUser className="w-5 h-5" />
+                        </div>
+                        <input
+                          type="text"
+                          {...register('full_name', { required: 'Full name is required' })}
+                          className={`block w-full pl-10 pr-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white border ${
+                            errors.full_name ? 'border-red-500' : 'border-gray-200 dark:border-gray-805'
+                          } rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500`}
+                          placeholder="Alex Administrator"
+                        />
+                        {errors.full_name && (
+                          <span className="text-xs text-red-500 mt-1 block text-left">{errors.full_name.message}</span>
+                        )}
+                      </div>
                     </div>
                   )}
 
-                  {authMethod === 'email' ? (
+                  {/* Input block depends on Sign In or Sign Up and authMethod */}
+                  {(!isRegistering || authMethod === 'email') ? (
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 text-left">
                         Email Address
@@ -317,7 +331,7 @@ const Login = () => {
                         <input
                           type="email"
                           {...register('email', { required: 'Email is required' })}
-                          className={`block w-full pl-10 pr-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 border ${
+                          className={`block w-full pl-10 pr-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-650 border ${
                             errors.email ? 'border-red-500' : 'border-gray-200 dark:border-gray-800'
                           } rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm`}
                           placeholder="you@example.com"
@@ -357,6 +371,39 @@ const Login = () => {
                     </div>
                   )}
 
+                  {/* Password field - always shown for Login, and also shown for Register to set up password */}
+                  <div>
+                    <div className="flex justify-between items-center">
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 text-left">
+                        Password
+                      </label>
+                      {!isRegistering && (
+                        <Link to="/forgot-password" className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">
+                          Forgot password?
+                        </Link>
+                      )}
+                    </div>
+                    <div className="relative mt-1">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 dark:text-gray-500">
+                        <FiLock className="w-5 h-5" />
+                      </div>
+                      <input
+                        type="password"
+                        {...register('password', { 
+                          required: 'Password is required',
+                          minLength: isRegistering ? { value: 6, message: 'Password must be at least 6 characters' } : undefined
+                        })}
+                        className={`block w-full pl-10 pr-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-655 border ${
+                          errors.password ? 'border-red-500' : 'border-gray-200 dark:border-gray-800'
+                        } rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm`}
+                        placeholder="••••••••"
+                      />
+                      {errors.password && (
+                        <span className="text-xs text-red-500 mt-1 block text-left">{errors.password.message}</span>
+                      )}
+                    </div>
+                  </div>
+
                   {isRegistering && (
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 text-left">
@@ -379,7 +426,10 @@ const Login = () => {
                       disabled={submitting}
                       className="flex justify-center w-full px-4 py-3 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 rounded-xl transition-all shadow-md active:scale-98 disabled:opacity-50 gap-2 items-center cursor-pointer"
                     >
-                      {submitting ? 'Sending code...' : 'Send Verification Code'}
+                      {isRegistering 
+                        ? (submitting ? 'Registering & Sending OTP...' : 'Register & Send OTP') 
+                        : (submitting ? 'Signing in...' : 'Sign In')
+                      }
                       <FiArrowRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -388,7 +438,10 @@ const Login = () => {
                 <div className="mt-4 text-center">
                   <button
                     type="button"
-                    onClick={() => setIsRegistering(!isRegistering)}
+                    onClick={() => {
+                      setIsRegistering(!isRegistering);
+                      reset();
+                    }}
                     className="text-xs font-semibold text-brand-600 hover:underline dark:text-brand-400 cursor-pointer"
                   >
                     {isRegistering ? 'Already have an account? Sign In' : "Don't have an account? Register"}
@@ -397,7 +450,7 @@ const Login = () => {
 
                 {/* Quick Login Shortcuts in Demo Mode */}
                 {isDemoMode && (
-                  <div className="mt-8 pt-6 border-t border-gray-150 dark:border-gray-850">
+                  <div className="mt-8 pt-6 border-t border-gray-155 dark:border-gray-850">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 bg-amber-50 dark:text-amber-300 dark:bg-amber-955/40 p-2.5 rounded-xl border border-amber-250 dark:border-amber-900/50 mb-4">
                       <FiShield className="w-4 h-4 text-amber-500" />
                       <span>Demo Mode: Click to Quick Login</span>
@@ -405,17 +458,24 @@ const Login = () => {
                     <div className="grid grid-cols-1 gap-2">
                       <button
                         onClick={() => handleQuickLogin('admin@apexevents.com')}
-                        className="flex justify-between items-center px-4 py-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 hover:bg-gray-55/60 dark:hover:bg-gray-850 border border-gray-200 dark:border-gray-800 rounded-xl transition-all cursor-pointer"
+                        className="flex justify-between items-center px-4 py-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 hover:bg-gray-50/60 dark:hover:bg-gray-850 border border-gray-200 dark:border-gray-800 rounded-xl transition-all cursor-pointer"
                       >
-                        <span>Super Admin (Email)</span>
-                        <span className="text-[10px] text-brand-655 dark:text-brand-400 font-mono">admin@apexevents.com</span>
+                        <span>Super Admin</span>
+                        <span className="text-[10px] text-brand-605 dark:text-brand-400 font-mono">admin@apexevents.com</span>
                       </button>
                       <button
-                        onClick={() => handleQuickLogin(null, '+15555551234')}
+                        onClick={() => handleQuickLogin('manager@apexevents.com')}
                         className="flex justify-between items-center px-4 py-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 hover:bg-gray-55/60 dark:hover:bg-gray-850 border border-gray-200 dark:border-gray-800 rounded-xl transition-all cursor-pointer"
                       >
-                        <span>Super Admin (Phone OTP)</span>
-                        <span className="text-[10px] text-brand-655 dark:text-brand-400 font-mono">+1 555-555-1234</span>
+                        <span>Event Manager</span>
+                        <span className="text-[10px] text-brand-605 dark:text-brand-400 font-mono">manager@apexevents.com</span>
+                      </button>
+                      <button
+                        onClick={() => handleQuickLogin('staff@apexevents.com')}
+                        className="flex justify-between items-center px-4 py-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 hover:bg-gray-55/60 dark:hover:bg-gray-850 border border-gray-200 dark:border-gray-800 rounded-xl transition-all cursor-pointer"
+                      >
+                        <span>Staff Member</span>
+                        <span className="text-[10px] text-brand-605 dark:text-brand-400 font-mono">staff@apexevents.com</span>
                       </button>
                     </div>
                   </div>
@@ -426,7 +486,7 @@ const Login = () => {
                   <div className="mt-6 text-center">
                     <button
                       onClick={() => toggleDemoMode(!isDemoMode)}
-                      className="text-xs font-semibold text-gray-555 hover:text-brand-600 dark:text-gray-400 dark:hover:text-brand-400 underline decoration-dotted cursor-pointer"
+                      className="text-xs font-semibold text-gray-500 hover:text-brand-600 dark:text-gray-400 dark:hover:text-brand-400 underline decoration-dotted cursor-pointer"
                     >
                       {isDemoMode ? 'Switch to Supabase Cloud Database' : 'Switch back to Local Demo Mode'}
                     </button>
@@ -459,7 +519,7 @@ const Login = () => {
               </p>
             </div>
 
-            <div className="text-xs text-gray-450 text-left">
+            <div className="text-xs text-gray-400 text-left">
               © 2026 ApexEvents Inc. All rights reserved.
             </div>
           </div>

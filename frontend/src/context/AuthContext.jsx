@@ -122,39 +122,48 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Signup
-  const signup = async (email, password, fullName, roleSelection = 'Staff') => {
+  const signup = async ({ email, phone, password, fullName, roleSelection = 'Staff' }) => {
     setLoading(true);
     if (isDemoMode) {
       const users = JSON.parse(localStorage.getItem('demo_users') || '[]');
-      if (users.some(u => u.email === email)) {
+      if (email && users.some(u => u.email === email)) {
         setLoading(false);
         return { data: null, error: new Error('Email already registered.') };
       }
+      if (phone && users.some(u => u.phone === phone)) {
+        setLoading(false);
+        return { data: null, error: new Error('Phone number already registered.') };
+      }
       const newUser = {
         id: 'd' + (users.length + 1),
-        email,
+        email: email || null,
+        phone: phone || null,
         password,
         full_name: fullName,
         role: roleSelection,
         avatar_url: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(fullName)}`
       };
-      users.push(newUser);
-      localStorage.setItem('demo_users', JSON.stringify(users));
+      sessionStorage.setItem('pending_signup', JSON.stringify(newUser));
       setLoading(false);
       return { data: { user: newUser }, error: null };
     } else {
       try {
-        const { data, error } = await supabase.auth.signUp({
-          email,
+        const payload = {
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}`,
             data: {
               full_name: fullName,
               role: roleSelection,
             }
           }
-        });
+        };
+        if (email) {
+          payload.email = email;
+          payload.options.emailRedirectTo = `${window.location.origin}`;
+        } else if (phone) {
+          payload.phone = phone;
+        }
+        const { data, error } = await supabase.auth.signUp(payload);
         if (error) throw error;
         return { data, error: null };
       } catch (err) {
@@ -251,18 +260,32 @@ export const AuthProvider = ({ children }) => {
       let currentUser;
 
       if (isSigningUp) {
-        currentUser = {
-          id: 'd' + (users.length + 1),
-          email: email || null,
-          phone: phone || null,
-          full_name: fullName,
-          role: roleSelection,
-          avatar_url: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(fullName)}`
-        };
-        users.push(currentUser);
-        localStorage.setItem('demo_users', JSON.stringify(users));
+        const pendingStr = sessionStorage.getItem('pending_signup');
+        if (pendingStr) {
+          currentUser = JSON.parse(pendingStr);
+          users.push(currentUser);
+          localStorage.setItem('demo_users', JSON.stringify(users));
+          sessionStorage.removeItem('pending_signup');
+        } else {
+          currentUser = {
+            id: 'd' + (users.length + 1),
+            email: email || null,
+            phone: phone || null,
+            password: 'password123',
+            full_name: fullName || 'Demo User',
+            role: roleSelection || 'Staff',
+            avatar_url: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(fullName || 'Demo')}`
+          };
+          users.push(currentUser);
+          localStorage.setItem('demo_users', JSON.stringify(users));
+        }
       } else {
         currentUser = users.find(u => (email && u.email === email) || (phone && u.phone === phone));
+      }
+
+      if (!currentUser) {
+        setLoading(false);
+        return { error: new Error('User not found.') };
       }
 
       setUser({ id: currentUser.id, email: currentUser.email, phone: currentUser.phone });
@@ -275,7 +298,7 @@ export const AuthProvider = ({ children }) => {
       try {
         const payload = {
           token,
-          type: email ? 'email' : 'sms',
+          type: isSigningUp && email ? 'signup' : (email ? 'email' : 'sms'),
         };
         if (email) {
           payload.email = email;
