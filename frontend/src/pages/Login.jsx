@@ -279,6 +279,7 @@ const Login = () => {
                     onClick={() => {
                       setAuthMethod('phone');
                       reset({ ...signupMeta });
+                      setTimeout(() => setValue('phone', '+91'), 0);
                     }}
                     className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                       authMethod === 'phone'
@@ -352,17 +353,18 @@ const Login = () => {
                         </div>
                         <input
                           type="tel"
+                          defaultValue="+91"
                           {...register('phone', { 
                             required: 'Phone number is required',
                             pattern: {
-                              value: /^\+[1-9]\d{1,14}$/,
-                              message: 'Format: +[CountryCode][Number] (e.g. +15555551234)'
+                              value: /^\+91\d{10}$/,
+                              message: 'Format: +91 followed by 10 digits (e.g. +919876543210)'
                             }
                           })}
-                          className={`block w-full pl-10 pr-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-650 border ${
+                          className={`block w-full pl-10 pr-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-655 border ${
                             errors.phone ? 'border-red-500' : 'border-gray-200 dark:border-gray-800'
                           } rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm`}
-                          placeholder="+15555551234"
+                          placeholder="+919876543210"
                         />
                         {errors.phone && (
                           <span className="text-xs text-red-500 mt-1 block text-left">{errors.phone.message}</span>
